@@ -1,0 +1,13 @@
+-- Schema for keeping track of which directories have .notes files
+CREATE TABLE notable_dirs (
+    dir_name,
+    last_viewed,
+    UNIQUE ( dir_name )
+);
+
+-- view to simplify display of dirs in last_viewed chronological order
+CREATE VIEW recently_viewed AS
+SELECT last_viewed, dir_name
+FROM notable_dirs
+ORDER BY last_viewed DESC
+;
