@@ -9,7 +9,7 @@ use Pod::Usage;
 use File::Spec::Functions qw( catfile );
 
 my $VERSION       = '1.0';
-my $notes_db_file = "$ENV{HOME}/.dnote.db";
+my $notes_db_file = "$ENV{HOME}/.dnotes.db";
 my $global_dbh           = setup_db_handle( db_file => $notes_db_file );
 
 my $options = {};
