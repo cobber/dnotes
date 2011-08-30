@@ -9,7 +9,7 @@ use Pod::Usage;
 use File::Spec::Functions qw( catfile );
 
 my $VERSION       = '1.0';
-my $notes_db_file = "$ENV{HOME}/.notes.db";
+my $notes_db_file = "$ENV{HOME}/.dnote.db";
 my $global_dbh           = setup_db_handle( db_file => $notes_db_file );
 
 my $options = {};
@@ -132,14 +132,6 @@ sub db_queries
                     ?
                     )
                 ",
-#             refresh_dir => "
-#                 INSERT OR UPDATE noted_dirs
-#                 SET
-#                     dir_name = ?,
-#                     summary  = ?
-#                 WHERE
-#                     dir_name = ?
-#                 ",
             rm_dir    => "DELETE FROM noted_dirs WHERE dir_name = ?",
             ls_dirs   => "SELECT * FROM recent_activity",
         };
@@ -179,7 +171,7 @@ sub show_notes
 
     foreach my $dir ( @dirs )
         {
-        my $notes_file = catfile( $dir, '.notes' );
+        my $notes_file = catfile( $dir, '.dnotes' );
 
         # make noises if there are no notes in selected directories,
         # but not if we're using the current directory
@@ -253,7 +245,7 @@ sub refresh_notes_dirs
         # skip missing directories - perhaps they are just not mounted
         next    unless -d $dir;
 
-        my $notes_file = catfile( $dir, '.notes' );
+        my $notes_file = catfile( $dir, '.dnotes' );
         if( -f $notes_file and open( my $NOTES_SUMMARY, '<', $notes_file ) )
             {
             # found a notes file:
@@ -270,7 +262,7 @@ sub refresh_notes_dirs
             }
         else
             {
-            # directory exists but no .notes file - remove the directory from the DB
+            # directory exists but no .dnotes file - remove the directory from the DB
             remove_dir_from_db( $dir );
             }
         }
@@ -317,7 +309,7 @@ sub clean_up
     my %param = @_;
     my @dirs  = @{$param{dirs}};
 
-    my @dirs_to_remove = grep { -d $_ and not -f catfile( $_, '.notes' ) } @dirs;
+    my @dirs_to_remove = grep { -d $_ and not -f catfile( $_, '.dnotes' ) } @dirs;
 
     foreach my $dir ( @dirs_to_remove )
         {
@@ -340,7 +332,7 @@ sub delete_notes
 
         remove_dir_from_db( $dir );
 
-        my $notes_file = catfile( $dir, '.notes' );
+        my $notes_file = catfile( $dir, '.dnotes' );
         next    unless -f $notes_file;
 
         printf "Removing notes file: $notes_file\n";
@@ -365,7 +357,7 @@ sub self_test
     require Test::More;
     # TODO: Riehm 2011-08-30 create a test db
     # TODO: Riehm 2011-08-30 create a test directory tree
-    # TODO: Riehm 2011-08-30 create a .notes file
+    # TODO: Riehm 2011-08-30 create a .dnotes file
     # display the notes file
     # ls the overview
     # display after rm file
@@ -374,28 +366,28 @@ sub self_test
 
 =head1 NAME
 
-dir_notes - display or manage simple notes stored in the current directory
+dnotes - display or manage simple notes stored in the current directory
 
 =head1 SYNOPSIS
 
 tcsh:
 
-    alias cd     'pushd \!* && dir_notes'
+    alias cd     'pushd \!* && dnotes'
     alias cdback 'pushd +1'
 
 bash:
 
     alias cd=cd_with_notes
     function cd_with_notes {
-        pushd "$@" && dir_notes
+        pushd "$@" && dnotes
     }
     alias cdback=pushd
 
-dir_notes [show [<dir...>]]
+dnotes [show [<dir...>]]
 
-dir_notes ls [--refresh]
+dnotes ls [--refresh]
 
-dir_notes rm <dir...>
+dnotes rm <dir...>
 
 =head1 DESCRIPTION
 
@@ -404,7 +396,7 @@ This command is a very simple way of managing directory specific notes files.
 The concept is simple:
 
     If you want to leave some reminders for yourself in a directory, simply
-    create a file called '.notes' in the directory, and write any text you like
+    create a file called '.dnotes' in the directory, and write any text you like
     in there.
 
     Add this script to your 'cd' alias, it will then automatically display the
@@ -414,7 +406,7 @@ The concept is simple:
 Additionally, this command keeps tracks of the time it displayed any notes, so
 that you can easily find out where you were working recently.
 
-When you no longer need notes for a directory, simply remove the .notes file.
+When you no longer need notes for a directory, simply remove the .dnotes file.
 This command will automatically notice and remove the direcory from the recent
 activities list.
 
@@ -428,20 +420,20 @@ Display the notes for the current directory.
 
 Optionally, a directory may be provided to display notes from a different directory.
 
-If a directory has no .notes file - then it will be removed from the recent activity list.
+If a directory has no .dnotes file - then it will be removed from the recent activity list.
 
 This is the default command.
 
 =item ls
 
-Display a list of directories with .notes files - in the order they were last accessed
+Display a list of directories with .dnotes files - in the order they were last accessed
 
 if --refresh is provided, then the summaries of the notes in the known directories will be updated in the overview DB, without updating the last-activity timestamps.
 
 =item rm <dir>
 
 Remove the directory from the recent activities list and if possible, also
-remove the .notes file in that directory.
+remove the .dnotes file in that directory.
 
 =back
 
@@ -461,7 +453,7 @@ Display the current version information and exit
 
 =head1 VERSION
 
-dir_notes version 1.0, 2011-08-12
+dnotes version 1.0, 2011-08-12
 
 =head1 COPYRIGHT
 

@@ -1,0 +1,20 @@
+Directory Notes - neat little system in progress
+
+Features:
+    display contents of .notes file in current directory if they exist
+    display overview of directories with notes (ls)
+    display multiple .notes if provided on the command line
+    automatically remove .notes dirs when they are deleted
+    delete unwanted .notes
+    built-in test
+
+todo: use as example of plugin CLI architecture etc.
+todo: split into suitable objects
+todo: pack into a par file?
+todo: add built-in test suite
+
+done: setup DB schema
+done: write perl version
+
+todo: write ksh version
+todo: write bash version
