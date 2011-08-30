@@ -1,13 +1,25 @@
--- Schema for keeping track of which directories have .notes files
-CREATE TABLE notable_dirs (
-    dir_name,
-    last_viewed,
-    UNIQUE ( dir_name )
-);
+-- SQLite3 DB schema for Stephen Riehm's 'directory notes' system.
+-- Copyright 2011, Stephen Riehm
 
--- view to simplify display of dirs in last_viewed chronological order
-CREATE VIEW recently_viewed AS
-SELECT last_viewed, dir_name
-FROM notable_dirs
-ORDER BY last_viewed DESC
-;
+-- Just one table:
+--      Track each directory, the time it was last visited and the first line of its .notes file.
+--      The summary could be read on-the-fly and thus always be up-to-date, however, by
+--          keeping a copy here, we can remind the user about the contents of directories which
+--          may not even be mounted at the moment (ie: USB sticks!)
+--      Entries are only deleted from this table if the directory exists but the .notes file doesn't
+--      (or if the user explicitly uses the 'rm' command for a directory)
+CREATE TABLE noted_dirs (
+                    dir_name,
+                    last_activity DEFAULT ( STRFTIME( '%s', 'now' ) ),
+                    summary,
+                    UNIQUE ( dir_name )
+                );
+
+-- Simple view to prvide a sorted list of the directories with their summaries.
+CREATE VIEW recent_activity
+                AS SELECT
+                    strftime( '%Y-%m-%d %H:%M', last_activity, 'unixepoch', 'localtime' ) AS last_activity,
+                    dir_name,
+                    summary
+                FROM noted_dirs
+                ORDER BY last_activity DESC;
