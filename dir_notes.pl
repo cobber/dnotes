@@ -306,7 +306,7 @@ sub list_notes_dirs
 
     foreach my $dir ( @overview )
         {
-        printf "%16s %-*s %s\n", $dir->{last_activity}, $dirs_width, $dir->{dir_name}, $dir->{summary} || '';
+        printf "%16s  %-*s  %s\n", $dir->{last_activity}, $dirs_width, $dir->{dir_name}, $dir->{summary} || '';
         }
 
     return;
