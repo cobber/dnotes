@@ -110,30 +110,11 @@ sub db_queries
                 FROM noted_dirs
                 ORDER BY last_activity DESC
                 ",
-            track_dir => "
-                INSERT OR REPLACE INTO noted_dirs (
-                    dir_name,
-                    last_activity,
-                    summary
-                    )
-                VALUES (
-                    ?,
-                    STRFTIME( '%s', 'now' ),
-                    ?
-                    )
-                ",
-            refresh_dir => "
-                INSERT OR REPLACE INTO noted_dirs (
-                    dir_name,
-                    summary
-                    )
-                VALUES (
-                    ?,
-                    ?
-                    )
-                ",
-            rm_dir    => "DELETE FROM noted_dirs WHERE dir_name = ?",
-            ls_dirs   => "SELECT * FROM recent_activity",
+            insert_dir  => "INSERT OR REPLACE INTO noted_dirs ( dir_name, summary ) VALUES ( ?, ? )",
+            check_dir   => "SELECT * FROM noted_dirs WHERE dir_name = ?",
+            update_dir  => "UPDATE noted_dirs SET summary = ? WHERE dir_name = ?",
+            rm_dir      => "DELETE FROM noted_dirs WHERE dir_name = ?",
+            ls_dirs     => "SELECT * FROM recent_activity",
         };
     }
 
@@ -163,6 +144,52 @@ sub init_db
     $dbh->do( $sql->{init_table}   );
     $dbh->do( $sql->{init_view}    );
     }
+
+sub track_dir
+    {
+    my %param       = @_;
+    my $dir         = $param{dir};
+    my $summary     = $param{summary};
+    my $need_insert = $param{reset_timestamp};
+    my $sql         = db_queries();
+
+    # strip whitespace from summary
+    $summary =~ s/^\s*|[\s\n\r]*$//g;
+
+    $global_dbh->begin_work();
+
+    if( not $need_insert )
+        {
+        my $check_sth = $global_dbh->prepare( $sql->{check_dir} );
+        $check_sth->execute( $dir );
+        if( $check_sth->fetchrow_hashref() )
+            {
+            # directory has an entry - just update the summary
+            my $update_sth = $global_dbh->prepare( $sql->{update_dir} );
+            $update_sth->execute( $summary, $dir );
+            $update_sth->finish();
+            }
+        else
+            {
+            # directory is unknown - fall through to insert new row
+            $need_insert = 1;
+            }
+        $check_sth->finish();
+        }
+
+    if( $need_insert )
+        {
+        # throw the directory and summary into the overview DB
+        my $insert_sth = $global_dbh->prepare( $sql->{insert_dir} );
+        $insert_sth->execute( $dir, $summary );
+        $insert_sth->finish();
+        }
+
+    $global_dbh->commit();
+
+    return;
+    }
+
 
 sub show_notes
     {
@@ -194,26 +221,8 @@ sub show_notes
             }
         close( $notes );
 
-        track_dir( dir => $dir, summary => $summary );
+        track_dir( dir => $dir, summary => $summary, reset_timestamp => 1 );
         }
-    }
-
-sub track_dir
-    {
-    my %param    = @_;
-    my $dir      = $param{dir};
-    my $summary  = $param{summary};
-    my $sql      = db_queries();
-
-    # strip whitespace from summary
-    $summary =~ s/^\s*|[\s\n\r]*$//g;
-
-    # throw the directory and summary into the overview DB
-    my $sth = $global_dbh->prepare( $sql->{track_dir} );
-    $sth->execute( $dir, $summary );
-    $sth->finish();
-
-    return;
     }
 
 sub refresh_notes_dirs
@@ -236,9 +245,6 @@ sub refresh_notes_dirs
         $sth->finish();
         }
 
-    # throw the directory and summary into the overview DB
-    my $sth = $global_dbh->prepare( $sql->{refresh_dir} );
-
     foreach my $dir ( @dirs )
         {
 
@@ -253,12 +259,8 @@ sub refresh_notes_dirs
             my $summary = <$NOTES_SUMMARY>; # just the first line
             close $NOTES_SUMMARY;
 
-            # strip whitespace from summary
-            $summary =~ s/^\s*|[\s\n\r]*$//g;
-
-            # update the summary in the DB
-#             $sth->execute( $dir, $summary, $dir );
-            $sth->execute( $dir, $summary );
+            # TODO: Riehm 2011-08-31 replace this with 'update or insert'
+            track_dir( dir => $dir, summary => $summary, reset_timestamp => 0 );
             }
         else
             {
@@ -266,8 +268,6 @@ sub refresh_notes_dirs
             remove_dir_from_db( $dir );
             }
         }
-
-    $sth->finish();
 
     return;
     }
