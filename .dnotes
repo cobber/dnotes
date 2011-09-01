@@ -1,20 +1,14 @@
-Directory Notes - neat little system
+dnotes - simple directory specific notes system
 
 Features:
-    display contents of .notes file in current directory if they exist
+    display contents of .dnotes file in current directory if they exist
     display overview of directories with notes (ls)
-    display multiple .notes if provided on the command line
-    automatically remove .notes dirs when they are deleted
-    delete unwanted .notes
-    built-in test
+    display multiple .dnotes files if provided on the command line
+    automatically remove directories from the overview if no .dnotes file is found
+    delete unwanted .notes (rm)
 
-todo: use as example of plugin CLI architecture etc.
-todo: split into suitable objects
-todo: pack into a par file?
 todo: add built-in test suite
 
-done: setup DB schema
-done: write perl version
-
-todo: write ksh version
-todo: write bash version
+done: setup DB schema automatically
+done: add licence info and readme for github
+done: upload to github
