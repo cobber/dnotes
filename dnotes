@@ -1,5 +1,10 @@
 #!/usr/bin/env perl
 
+# dnotes - simple directory specific notes system
+#
+# Copyright (C) 2011, Stephen Riehm.
+# Distributed under perl's 'Artistic License 2.0'
+
 use strict;
 use warnings;
 use Cwd;
@@ -10,7 +15,8 @@ use File::Spec::Functions qw( catfile );
 
 my $VERSION       = '1.2';
 my $notes_db_file = "$ENV{HOME}/.dnotes.db";
-my $global_dbh           = setup_db_handle( db_file => $notes_db_file );
+my $notes_file    = ".dnotes";
+my $global_dbh    = setup_db_handle( db_file => $notes_db_file );
 
 my $options = {};
 GetOptions( $options,
@@ -39,7 +45,7 @@ elsif( $command =~ /rm/i )
     delete_notes( dirs => $notes_dirs );
     list_notes_dirs( header => "\nRemaining directories with notes:" );
     }
-else # show
+else # $command eq 'show'
     {
     show_notes( dirs => $notes_dirs );
     clean_up(   dirs => $notes_dirs );
@@ -198,7 +204,7 @@ sub show_notes
 
     foreach my $dir ( @dirs )
         {
-        my $notes_file = catfile( $dir, '.dnotes' );
+        my $notes_file = catfile( $dir, $notes_file );
 
         # make noises if there are no notes in selected directories,
         # but not if we're using the current directory
@@ -251,7 +257,7 @@ sub refresh_notes_dirs
         # skip missing directories - perhaps they are just not mounted
         next    unless -d $dir;
 
-        my $notes_file = catfile( $dir, '.dnotes' );
+        my $notes_file = catfile( $dir, $notes_file );
         if( -f $notes_file and open( my $NOTES_SUMMARY, '<', $notes_file ) )
             {
             # found a notes file:
@@ -312,7 +318,7 @@ sub clean_up
     # only clean up directories which exist.
     # Non-existent directories are assumed to be unmounted (e.g.: USB stick) and remain unchanged.
     # User can use rm command to explicitly remove dirs
-    my @dirs_to_remove = grep { -d $_ and not -f catfile( $_, '.dnotes' ) } @dirs;
+    my @dirs_to_remove = grep { -d $_ and not -f catfile( $_, $notes_file ) } @dirs;
 
     foreach my $dir ( @dirs_to_remove )
         {
@@ -333,7 +339,7 @@ sub delete_notes
         {
         remove_dir_from_db( $dir );
 
-        my $notes_file = catfile( $dir, '.dnotes' );
+        my $notes_file = catfile( $dir, $notes_file );
         next    unless -f $notes_file;
 
         printf "Removing notes file: $notes_file\n";
@@ -463,3 +469,13 @@ Copyright 2011, Stephen Riehm, Munich, Germany
 =head1 AUTHOR
 
 Stephen Riehm <s.riehm@opensauce.de>
+
+=head1 COPYRIGHT AND LICENSE
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the Artistic License 2.0.
+
+This program is distributed in the hope that it will be useful, but it is
+provided "as is" and without any express or implied warranties.
+
+For details, see the full text of the license in the file LICENSE.
