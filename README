@@ -1,0 +1,108 @@
+dnotes
+======
+
+    A simple directory specific notes system.
+
+Motivation:
+-----------
+
+    Do you have too many 'project directories'?
+    Well organised so that each thing you're working on or trying out is nicely sandboxed...
+    but you've since been distracted and no longer know exactly where you left off?
+
+    I do.
+    
+    Constantly!
+
+    You could write ReadeMe files and leave reminders to yourself.
+
+    Or you could use dnotes!
+
+    dnotes extends the simple readme text file concept with features like:
+
+        - providing a simple way to automatically display notes whenever you visit a directory
+        - keeping track of which project directories you visited, in chronological order
+        - provide an overview of which project directories you have and what their purpose is/was
+
+Introduction:
+-------------
+
+    To see dnotes at work, download it and make sure it is executable and that it can find perl.
+    Now simply create a .dnotes file in the current directory and then run dnotes.
+    For example:
+
+        % echo hello world > .dnotes
+        % dnotes
+        NOTES:
+        ======
+        hello world
+
+    Very similar to 'cat' you might say, but dnotes will not complain if there
+    is no file to read and also goes a step or two further.
+    dnotes also records the current directory path and the first line of your
+    .dnotes file, so you can get an overview of what you've got going
+    on, like this:
+
+        % dnotes ls
+        Recently used directories with notes:
+        =====================================
+        2011-09-01 23:30  /tmp                                           hello world
+        2011-09-01 23:15  /Users/steve/Development/Unix/dnotes           dnotes - directory specific notes system
+        2011-08-30 23:58  /Users/steve/Development/hacker.org/one_of_us  hacker.org one-of-us challenge
+
+    Now, if you're like me, you will constantly forget to read readme's,
+    especially if they are hidden, like .dnotes files are.
+    If you create an alias for 'cd' which calls dnotes after changing
+    directories, your notes will be displayed automatically as soon as you
+    enter the directory, like this:
+
+        % cd /tmp
+        NOTES:
+        ======
+        hello world
+
+        I really should come up with a better 'this is a test' message
+        %
+
+    If you then delete your .dnotes file and run dnotes again the entry will
+    automatically be removed from the overview:
+
+        % rm .dnotes
+        % dnotes
+        <no output>
+        % dnotes ls
+        Recently used directories with notes:
+        =====================================
+        2011-09-01 23:15  /Users/steve/Development/Unix/dnotes           dnotes - directory specific notes system
+        2011-08-30 23:58  /Users/steve/Development/hacker.org/one_of_us  hacker.org one-of-us challenge
+
+    For full details, run dnotes --help
+
+System Requirements:
+--------------------
+
+    perl 5.8 or above with the modules:
+        Cwd
+        DBD::SQLite
+        DBI
+        File::Spec
+        Getopt::Long
+        Pod::Usage
+
+Author:
+-------
+
+Stephen Riehm, japh@opensauce.de
+
+License Information:
+--------------------
+
+dnotes is Copyright (C) 2011, Stephen Riehm.
+
+This program is free software; you can redistribute it and/or modify it under
+the terms of the Artistic License 2.0.
+
+This program is distributed in the hope that it will be useful, but it is
+provided "as is" and without any express or implied warranties.
+
+For details, see the full text of the license in the file LICENSE.

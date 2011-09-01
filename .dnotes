@@ -1,0 +1,14 @@
+dnotes - simple directory specific notes system
+
+Features:
+    display contents of .dnotes file in current directory if they exist
+    display overview of directories with notes (ls)
+    display multiple .dnotes files if provided on the command line
+    automatically remove directories from the overview if no .dnotes file is found
+    delete unwanted .notes (rm)
+
+todo: add built-in test suite
+
+done: setup DB schema automatically
+done: add licence info and readme for github
+done: upload to github
