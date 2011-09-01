@@ -309,6 +309,9 @@ sub clean_up
     my %param = @_;
     my @dirs  = @{$param{dirs}};
 
+    # only clean up directories which exist.
+    # Non-existent directories are assumed to be unmounted (e.g.: USB stick) and remain unchanged.
+    # User can use rm command to explicitly remove dirs
     my @dirs_to_remove = grep { -d $_ and not -f catfile( $_, '.dnotes' ) } @dirs;
 
     foreach my $dir ( @dirs_to_remove )
@@ -325,11 +328,9 @@ sub delete_notes
     my @dirs  = @{$param{dirs}};
     my $sql   = db_queries();
 
+    # don't check if dir exists - users want's this dir gone, be gone with it
     foreach my $dir ( @dirs )
         {
-        # don't delete notes if the directory cannot be accessed (TODO: Riehm 2011-08-30 add --force?)
-        next    unless -d $dir;
-
         remove_dir_from_db( $dir );
 
         my $notes_file = catfile( $dir, '.dnotes' );
