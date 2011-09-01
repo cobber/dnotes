@@ -8,7 +8,7 @@ use Getopt::Long;
 use Pod::Usage;
 use File::Spec::Functions qw( catfile );
 
-my $VERSION       = '1.1';
+my $VERSION       = '1.2';
 my $notes_db_file = "$ENV{HOME}/.dnotes.db";
 my $global_dbh           = setup_db_handle( db_file => $notes_db_file );
 
@@ -454,7 +454,7 @@ Display the current version information and exit
 
 =head1 VERSION
 
-dnotes version 1.1, 2011-08-12
+dnotes version 1.2, 2011-09-01
 
 =head1 COPYRIGHT
 
