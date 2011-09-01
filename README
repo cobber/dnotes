@@ -6,11 +6,13 @@ dnotes
 Motivation:
 -----------
 
-    Do you have too many 'project directories' where you have been working on
-    something, trying something out, but you've since been distracted and no
-    longer know exactly where you left off?
+    Do you have too many 'project directories'?
+    Well organised so that each thing you're working on or trying out is nicely sandboxed...
+    but you've since been distracted and no longer know exactly where you left off?
 
-    I do. Constantly!
+    I do.
+    
+    Constantly!
 
     You could write ReadeMe files and leave reminders to yourself.
 
@@ -18,9 +20,9 @@ Motivation:
 
     dnotes extends the simple readme text file concept with features like:
 
-        - providing a simple way to automatically display notes whenever I visit a directory
-        - keeping track of which project directories I visited, in chronological order
-        - provide an overview of which project directories I have and what their purpose is/was
+        - providing a simple way to automatically display notes whenever you visit a directory
+        - keeping track of which project directories you visited, in chronological order
+        - provide an overview of which project directories you have and what their purpose is/was
 
 Introduction:
 -------------
