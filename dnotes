@@ -86,8 +86,7 @@ sub clean_dirs
             $dir =~ s:/[^/]+$::;    # chop last part of path
             }
 
-        next if $duplicate{$dir}++; # faster
-        next if not -d $dir;        # slower
+        next if $duplicate{$dir}++;
 
         push @dirs, $dir;
         }
