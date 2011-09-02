@@ -1,2 +1,23 @@
 ---
-license: artistic2
+abstract:       a simple, directory specific, notes system
+author:
+    - Stephen Riehm <japh@opensauce.de>
+dynamic_config: 0
+license:
+    - artistic_2
+meta-spec:
+    version:    2
+    url:        http://search.cpan.org/perldoc?CPAN::Meta::Spec
+name:           dnotes
+release_status: stable
+version:        1.0
+prereqs:
+    runtime:
+        requires:
+            perl:           5.008
+            Cwd:            3.0
+            DBI:            1.61
+            DBD::SQLite:    1.33
+            Getopt::Long:   2.38
+            Pod::Usage:     1.36
+            File::Spec:     3.33
