@@ -12,22 +12,30 @@ use DBI;
 use Getopt::Long;
 use Pod::Usage;
 use File::Spec::Functions qw( catfile );
+use Net::Domain           qw( hostname );
 
-my $VERSION       = '1.1';
-my @commands      = qw( help ls man prompt rm show version );
-my $notes_db_file = "$ENV{HOME}/.dnotes.db";
-my $notes_file    = ".dnotes";
-my $global_dbh    = setup_db_handle( db_file => $notes_db_file );
+my $VERSION         = '1.2';
+my @commands        = qw( help ls man prompt rm show version );
+
+# set up defaults which the user can change
+my $options = {
+    notes_db_file   => catfile( $ENV{HOME}, ".dnotes.db" ),
+    notes_file      => ".dnotes",
+    session_timeout => 1 * 24 * 60 * 60,            # default: 1 day
+};
 
 # parse command line
-my $options = {};
 GetOptions( $options,
     'columns=s',
+    'notes_db_file|db=s',   # for testing only
+    'notes_file=s',         # for testing only
     'dirs',
-    'help|man|?',       # dummy for compatibility with traditional unix command style
+    'help|man|?',           # dummy for compatibility with traditional unix command style
     'missing',
     'refresh|update',
-    'version',          # dummy for compatibility with traditional unix command style
+    'session_timeout|timeout=i',
+    'self_test',
+    'version',              # dummy for compatibility with traditional unix command style
 ) or pod2usage( 2 );
 
 # parse remaining arguments (command followed by optional directories)
@@ -41,17 +49,20 @@ if( @matching_commands > 1 )
     pod2usage(
         -verbose => 1,
         -exitval => 1,
-        -message  => "ambiguous command '$ARGV[0]' (matches: @matching_commands)",
+        -message => "ambiguous command '$ARGV[0]' (matches: @matching_commands)",
         );
     }
 
 # if the first argument was a valid command - remove it from ARGV
 shift @ARGV             if @matching_commands;
 
+# connect to the database
+my $global_dbh     = setup_db_handle( db_file => $options->{notes_db_file} );
+
 # catch the rest of @ARGV as a possible list of directories to be processed
-my $command           = $matching_commands[0] || 'show';  # default is 'show'
-my $explicit_dirs     = scalar @ARGV;
-my $notes_dirs        = [ clean_dirs( @ARGV ) ];
+my $command        = $matching_commands[0] || 'show';  # default is 'show'
+my $explicit_dirs  = scalar @ARGV;
+my $notes_dirs     = [ clean_dirs( @ARGV ) ];
 
 # actually perform the selected commands
 if( $command eq 'help' or $options->{help} or $command eq 'man' or $options->{man} )
@@ -63,6 +74,11 @@ elsif( $command eq 'version' or $options->{version} )
     {
     pod2usage( -verbose => 99, -sections => [ qw( VERSION COPYRIGHT ) ] );
     # not reached
+    }
+elsif( $options->{self_test} )
+    {
+    self_test();
+    exit;
     }
 elsif( $command eq 'ls' )
     {
@@ -78,9 +94,9 @@ elsif( $command eq 'ls' )
 
     my $dir_filter = undef;
     if( $options->{missing} )
-    {
+        {
         $dir_filter = sub { my $dir = shift; return ( -d $dir->{dir_name} ) ? 0 : 1; };
-    }
+        }
 
     list_notes_dirs(
         header     => $header,
@@ -96,10 +112,12 @@ elsif( $command eq 'rm' )
 else # $command eq 'show' or 'show'
     {
     show_notes(
-        dirs                => $notes_dirs,
-        hide_unless_changed => ( $command eq 'prompt' ? 1 : 0 ),
-        );
-    clean_up( dirs => $notes_dirs );
+            dirs                => $notes_dirs,
+            hide_unless_changed => ( $command eq 'prompt' ? 1 : 0 ),
+            notes_file          => $options->{notes_file},
+            session_timeout     => $options->{session_timeout},
+            );
+    clean_up( dirs => $notes_dirs, notes_file => $options->{notes_file} );
     }
 
 $global_dbh->disconnect();
@@ -151,20 +169,21 @@ sub db_queries
     return {
             init_noted_dirs_table => "
                 CREATE TABLE noted_dirs (
-                    dir_name,
-                    last_activity DEFAULT ( STRFTIME( '%s', 'now' ) ),
-                    summary,
+                    dir_name                TEXT,
+                    summary                 TEXT,
+                    last_activity           TIMESTAMP DEFAULT ( STRFTIME( '%s', 'now' ) ),
                     UNIQUE ( dir_name )
                 )
-            ",
+                ",
             init_displayed_dirs_table => "
-                CREATE TABLE displayed_dirs (
-                    session_pid,
-                    dir_name,
-                    notes_timestamp,
-                    UNIQUE ( session_pid )
+                CREATE TABLE display_cache (
+                    session_id              INTEGER,
+                    dir_name                TEXT,
+                    notes_timestamp         TIMESTAMP,
+                    display_timestamp       TIMESTAMP DEFAULT ( STRFTIME( '%s', 'now' ) ),
+                    UNIQUE ( session_id, dir_name )
                 )
-            ",
+                ",
             init_recent_activity_view => "
                 CREATE VIEW recent_activity
                 AS SELECT
@@ -179,8 +198,9 @@ sub db_queries
             update_dir                   => "UPDATE noted_dirs SET summary = ? WHERE dir_name = ?",
             rm_dir                       => "DELETE FROM noted_dirs WHERE dir_name = ?",
             ls_dirs                      => "SELECT * FROM recent_activity",
-            session_displayed_dir        => "INSERT OR REPLACE INTO displayed_dirs ( session_pid, dir_name, notes_timestamp ) VALUES ( ?, ?, ? )",
-            was_dir_displayed_in_session => "SELECT 1 FROM displayed_dirs WHERE session_pid = ? and dir_name = ? and notes_timestamp = ?",
+            display_dir_in_session       => "INSERT OR REPLACE INTO display_cache ( session_id, dir_name, notes_timestamp ) VALUES ( ?, ?, ? )",
+            was_dir_displayed_in_session => "SELECT 1 FROM display_cache WHERE session_id = ? and dir_name = ? and notes_timestamp = ?",
+            rm_old_sessions              => "DELETE FROM display_cache WHERE display_timestamp < ( STRFTIME( '%s', 'now' ) - ? )",
         };
     }
 
@@ -260,20 +280,21 @@ sub track_dir
 sub show_notes
     {
     my %param         = @_;
-    my @dirs          = @{$param{dirs} || []};
+    my @dirs          = @{ $param{dirs} || [] };
 
     foreach my $dir ( @dirs )
         {
-        my $notes_file = catfile( $dir, $notes_file );
+        my $notes_file = catfile( $dir, $param{notes_file} );
 
         # intended for use in the shell's prompt
         if( $param{hide_unless_changed} )
-        {
+            {
             next    unless has_dir_changed(
-                dir             => $dir,
-                notes_timestamp => (stat( $notes_file ))[9] || 0,   # .dnotes' mtime
-                );
-        }
+                                            dir             => $dir,
+                                            notes_timestamp => ( stat( $notes_file ) )[9] || 0,   # .dnotes' mtime
+                                            session_timeout => $param{session_timeout},
+                                            );
+            }
 
         # make noises if there are no notes in selected directories,
         # but not if we're using the current directory
@@ -285,19 +306,22 @@ sub show_notes
         next unless -f $notes_file;
         next unless open( my $notes, '<', $notes_file );
 
-        my $summary;
-
         my $header = sprintf "NOTES%s:", $explicit_dirs ? " for $dir" : '';
         printf "%s\n%s\n", $header, '=' x length( $header );
+
+        my $summary;
         while( my $line = <$notes> )
             {
             print $line;
             $summary ||= $line;
             }
+
         close( $notes );
 
         track_dir( dir => $dir, summary => $summary, reset_timestamp => 1 );
         }
+
+    return;
     }
 
 sub refresh_notes_dirs
@@ -326,7 +350,7 @@ sub refresh_notes_dirs
         # skip missing directories - perhaps they are just not mounted
         next    unless -d $dir;
 
-        my $notes_file = catfile( $dir, $notes_file );
+        my $notes_file = catfile( $dir, $param{notes_file} );
         if( -f $notes_file and open( my $NOTES_SUMMARY, '<', $notes_file ) )
             {
             # found a notes file:
@@ -384,9 +408,9 @@ sub list_notes_dirs
     }
 
     my $column_format = {
-        'last_activity' => sprintf( "%%-%ds", $max_width->{last_activity} ),
-        'dir_name'      => sprintf( "%%-%ds", $max_width->{dir_name}      ),    # hard coded but dynamically determined width
-        'summary'       => sprintf( "%%-%ds", $max_width->{summary}       ),
+        'last_activity' => sprintf( "%%-%ds", $max_width->{last_activity} || 0 ),
+        'dir_name'      => sprintf( "%%-%ds", $max_width->{dir_name}      || 0 ),    # hard coded but dynamically determined width
+        'summary'       => sprintf( "%%-%ds", $max_width->{summary}       || 0 ),
         };
     my $format = join( '  ', @{$column_format}{ @{$columns} } ) . "\n";
 
@@ -400,8 +424,9 @@ sub list_notes_dirs
 
 sub clean_up
     {
-    my %param = @_;
-    my @dirs  = @{$param{dirs}};
+    my %param      = @_;
+    my @dirs       = @{$param{dirs}};
+    my $notes_file = $param{notes_file};
 
     # only clean up directories which exist.
     # Non-existent directories are assumed to be unmounted (e.g.: USB stick) and remain unchanged.
@@ -427,10 +452,9 @@ sub delete_notes
         {
         remove_dir_from_db( $dir );
 
-        my $notes_file = catfile( $dir, $notes_file );
+        my $notes_file = catfile( $dir, $param{notes_file} );
         next    unless -f $notes_file;
 
-        printf "Removing notes file: $notes_file\n";
         unlink $notes_file;
         }
     }
@@ -445,22 +469,27 @@ sub delete_notes
 sub has_dir_changed
     {
     my %param = @_;
-    my $sql = db_queries();
+    my $sql   = db_queries();
 
-    $param{session_pid} ||= getppid();
+    $param{session_id} ||= sprintf( "%s:%s", lc( hostname() ), getppid() );
 
     my $was_previously_displayed = 0;
 
+    # trash any old session information before checking if this dir needs to be displayed
+    my $cleanup_sth = $global_dbh->prepare( $sql->{rm_old_sessions} );
+    $cleanup_sth->execute( $param{session_timeout} );
+    $cleanup_sth->finish();
+
     # have we already displayed this directory in this session?
     my $check_sth = $global_dbh->prepare( $sql->{was_dir_displayed_in_session} );
-    $check_sth->execute( $param{session_pid}, $param{dir}, $param{notes_timestamp} );
+    $check_sth->execute( $param{session_id}, $param{dir}, $param{notes_timestamp} );
     ( $was_previously_displayed ) = $check_sth->fetchrow_array();
     $check_sth->finish();
 
     # always update the table to prevent re-displaying the same directory time
     # and again
-    my $update_sth = $global_dbh->prepare( $sql->{session_displayed_dir} );
-    $update_sth->execute( $param{session_pid}, $param{dir}, $param{notes_timestamp} );
+    my $update_sth = $global_dbh->prepare( $sql->{display_dir_in_session} );
+    $update_sth->execute( $param{session_id}, $param{dir}, $param{notes_timestamp} );
     $update_sth->finish();
 
     # reverse logic: don't display if was previously displayed
@@ -482,13 +511,34 @@ sub remove_dir_from_db
 sub self_test
     {
     require Test::More;
-    # TODO: Riehm 2011-08-30 create a test db
-    # TODO: Riehm 2011-08-30 create a test directory tree
-    # TODO: Riehm 2011-08-30 create a .dnotes file
-    # display the notes file
-    # ls the overview
-    # display after rm file
-    # create then rm notes file
+    require File::Temp;
+    require File::Spec::Functions;
+
+    File::Spec::Functions->import( qw( catfile catdir ) );
+
+    my $test_base = File::Temp->newdir();
+
+    my @test_dirs = map { catdir( $test_base->dirname(), $_ ) } qw( foo bar baz );
+
+    foreach my $dir ( @test_dirs )
+        {
+        mkdir( $dir );
+        my $filename = catfile( $dir, '.dnotes' );
+        open( my $file, '>', $filename );
+        printf "creating dnotes file: $filename\n";
+        printf $file "this is $dir\n";
+        close( $file );
+        }
+
+    my $options = {
+        notes_db_file => catfile( $test_base->dirname, 'test.db' ),
+    };
+
+    printf "using dnotes db: $options->{notes_db_file}\n";
+
+    # TODO: Riehm 2011-10-05 modify code enough so that all functions can be tested without interfering with stdout
+
+    return;
     }
 
 =head1 NAME
@@ -525,14 +575,18 @@ C<dnotes> is a very simple 'directory specific notes' system.
 
 The concept is:
 
-    If you want to leave some reminders for yourself in a directory,
-    create a file called '.dnotes' in the directory, and write any text you like
-    in there.
+=over
 
-    Add C<dnotes> to your shell's 'pre-prompt-command' setting, and it will
-    automatically display your .dnotes files whenever you 'cd' to a directory
-    with a .dnotes file, or when the .dnotes file in the current directory
-    changes.
+If you want to leave some reminders for yourself in a directory,
+create a file called '.dnotes' in the directory, and write any text you like
+in there.
+
+Add C<dnotes prompt> to your shell's 'pre-prompt' setting, and it will
+automatically display your .dnotes files whenever you 'cd' to a directory
+with a .dnotes file, or when the .dnotes file in the current directory
+changes.
+
+=back
 
 Additionally, C<dnotes> keeps tracks of the time it displayed any notes and
 the first line of each .dnotes file (referred to here as the 'summary'), so
@@ -546,7 +600,7 @@ activities list.
 
 =over 4
 
-=item show [<dir>]
+=item show [<dir...>]
 
 Display the notes for the current directory.
 
@@ -565,7 +619,7 @@ if the .dnotes file has changed or the current directory has changed.
 
 =item ls [--refresh] [--missing] [--dirs] [--columns <...>]
 
-Display a list of directories with .dnotes files - in the order they were last accessed
+Display a list of directories with .dnotes files - in the order they were last accessed.
 
 If --refresh is provided, then the summaries of the notes in the known
 directories will be updated in the overview database, without updating the
@@ -573,13 +627,19 @@ last-activity timestamps.
 
 Specifying --missing will only display those directories which can't (currently!) be accessed.
 This may be because they were mounted from remote file systems, or because they have been deleted.
+It's up to you to decide and manually remove the ones you no longer wish to see.
 
 Deleted directories can be removed from dnotes' database with the C<dnotes rm> command.
-(Note: if you delete a .dnotes file and are using dnotes in your prompt as
-suggested above, then the directory will be removed from dnotes' database
-automatically)
 
-If --dirs is specified, then only the list of directories with .dnotes files will be output.
+=over
+
+Note: if you delete a .dnotes file and are using dnotes in your prompt as
+suggested above, then the directory will be removed from dnotes' database
+automatically. You can check this with C<dnotes ls>
+
+=back
+
+If --dirs is specified, then only .dnotes files in those directories will be displayed.
 
 --columns can be used to specify the columns to display and the order in which
 they should appear.
@@ -613,15 +673,21 @@ Display the current version information and exit
 
 The list of columns to be displayed. Column names must be separated by a comma.
 
-Default: last_activity,dir_name,summary
+Default: C<last_activity,dir_name,summary>
+
+=item --db <database file>
+
+Use <database file> instead of the default C<$HOME/.dnotes.db>.
+
+Intended mainly for testing.
 
 =item --help
 
-Implicitly calls the 'help' command (for compatibility with traditional unix commands)
+Implicitly calls the C<help> command (for compatibility with traditional unix commands)
 
 =item --missing
 
-(Only valid with the 'ls' sub-command)
+(Only valid with the C<ls> sub-command)
 
 Lists directories that are known to the dnotes database, but cannot be found.
 
@@ -630,9 +696,15 @@ Other possibilities include unmounted USB drives or network directories. For
 this reason, dnotes will NOT delete these directories from its database
 automatically!
 
+=item --notes_file <filename>
+
+Look for <filename> instead of C<.dnotes> files.
+
+Inteded mainly for testing.
+
 =item --refresh
 
-(Only valid with the 'ls' sub-command)
+(Only valid with the C<ls> sub-command)
 
 Update the summaries that were stored in the DB from all known
 directories with .dnotes files.
@@ -640,14 +712,14 @@ directories with .dnotes files.
 Directories which can be accessed, but do not have .dnotes files are removed
 from the DB.
 
-Directories that are inaccessable are assumed to be 'unmounted' - their status
+Directories that are inaccessable are assumed to be unmounted - their status
 is left unchanged!
 
 The last-active timestamps for all directories are left unchanged.
 
 =item --version
 
-Implicitly calls the 'version' command (for compatibility with traditional unix commands)
+Implicitly calls the C<version> command (for compatibility with traditional unix commands)
 
 =back
 
@@ -655,21 +727,21 @@ Implicitly calls the 'version' command (for compatibility with traditional unix 
 
 =over
 
-=item 'dnotes prompt'
+=item C<dnotes prompt>
 
-    The 'prompt' sub-command uses the parent PID to identify 'sessions'.
+    The C<prompt> sub-command uses the parent PID to identify sessions.
 
-    Using 'dnotes prompt' from a sub-shell in your prompt will cause .dnotes
+    Using C<dnotes prompt> from a sub-shell in your prompt will cause .dnotes
     files to be displayed every time - which is probably not the desired effect.
 
-    'dnotes prompt' has no way to know when a PID is no longer relevant -
-    eventually old, re-used PID's may cause .dnotes messages to be hidden when
-    they should have been displayed.
+    C<dnotes prompt> has no way to know when a PID is no longer relevant.
+    Currently, sessions are automatically invalidated after 24 hours - so you
+    will see the .dnotes file for each directory at least once per day.
 
-    The use of shared filesystems (such as NFS) can cause .dnotes files to be suppressed
-    if two processes on different machines have the same PID.
+=item C<dnotes prompt> seems to hang occasionally for no apparrent reason
 
-    There is currently no way to automatically clean up old PID's from the database.
+    The good news is that it normally comes back after 15-20 seconds. I have no
+    idea why this is happening.
 
 =back
 
@@ -679,9 +751,15 @@ file from being displayed.
 
 =head1 VERSION
 
-dnotes version 1.1, 2011-09-14
+dnotes version 1.2, 2011-10-05
 
 =head1 VERSION HISTORY
+
+dnotes version 1.2, 2011-10-05
+    schema update
+    remove old sessions
+    add --db and --notes_file for added flexibility
+    add --self_test
 
 dnotes version 1.1, 2011-09-14
     move '--help'        to 'help'

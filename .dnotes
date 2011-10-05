@@ -8,10 +8,3 @@ Features:
     delete unwanted .notes (rm)
 
 todo: add built-in test suite
-
-done: setup DB schema automatically
-done: add licence info and readme for github
-done: upload to github
-todo: use prompt instead of alias
-hello
-hello

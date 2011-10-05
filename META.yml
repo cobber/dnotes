@@ -10,7 +10,7 @@ meta-spec:
     url:        http://search.cpan.org/perldoc?CPAN::Meta::Spec
 name:           dnotes
 release_status: stable
-version:        1.0
+version:        1.2
 prereqs:
     runtime:
         requires:
