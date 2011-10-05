@@ -52,9 +52,10 @@ Introduction:
 
     Now, if you're like me, you will constantly forget to read readme's,
     especially if they are hidden, like .dnotes files are.
-    If you create an alias for 'cd' which calls dnotes after changing
-    directories, your notes will be displayed automatically as soon as you
-    enter the directory, like this:
+
+    At this point, you may want to add 'dnotes prompt' to your shell's pre-prompt setting.
+    Then, simply changing a .dnotes file or changing directories will 
+    will automatically display the .dnotes file for you, like this:
 
         % cd /tmp
         NOTES:
@@ -87,6 +88,7 @@ System Requirements:
         DBI
         File::Spec
         Getopt::Long
+        Net::Domain
         Pod::Usage
 
 Author:
